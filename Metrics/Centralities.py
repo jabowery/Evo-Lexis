@@ -1,16 +1,20 @@
 # -*- coding: utf-8 -*-
+
+#Prints list of nodes along their centrality
+#USAGE: Centralities.py -l -t s -q <path-to-dag-file>
+#OUTPUT: (per line) node    centraltiy
+
+#NOTE: Code includes many redundant stuff for historical reasons. I will clean the code in future.
+
 """
 @author: Payam Siyari
 """
-#NOTE: Main G-Lexis code.
-#Also includes necessary data structures for Lexis-DAG
-
 from __future__ import division
 import os
 from os import listdir
 from os.path import isfile, join
 import random
-from collections import defaultdict, Counter
+from collections import defaultdict
 from bisect import bisect_left
 import fileinput
 import sys
@@ -47,7 +51,7 @@ class DAG(object):
     # quietLog = False #if true, disables logging
     # iterations = 0
 
-    def __init__(self, inputFile, loadDAGFlag, chFlag = SequenceType.Character, noNewLineFlag = True, removal_indices = [], working_path = ''):
+    def __init__(self, inputFile, loadDAGFlag, chFlag = SequenceType.Character, noNewLineFlag = True):
         self.preprocessedInput = []  # Original input as a sequence of integers
         self.dic = {}  # Dictionary for correspondence of integers to original chars (only when charSeq = 'c','s')
         self.DAG = {}  # Adjacency list of DAG
@@ -63,11 +67,7 @@ class DAG(object):
         self.quietLog = False  # if true, disables logging
         self.iterations = 0
         if loadDAGFlag:
-            if len(removal_indices) > 0:
-                self.initFromDAG_withRemoval(inputFile, removal_indices, working_path)
-            else:
-                self.initFromDAG(inputFile)
-            # self.initFromDAG(inputFile, removal_indices)
+            self.initFromDAG(inputFile)
         else:
             self.initFromStrings(inputFile, chFlag, noNewLineFlag)
     #Initializes (an unoptimized) DAG from inputFile. charSeq tells if inputFile is a char sequence, int sequence or space-separated sequence
@@ -88,79 +88,7 @@ class DAG(object):
             self.separatorInts.add(self.nextNewInt)
             self.separatorIntsIndices.add(len(self.concatenatedDAG)-1)
             self.nextNewInt += 2
-    def initFromDAG_withRemoval(self, inputFile, removal_indices, working_path = ''):
-        textFile = inputFile.read().splitlines()
-        textFile = textFile[2:]
-        if len(removal_indices) > 0:#Removal of targets
-            remaining_indices = [x for x in range(len(textFile)) if x not in removal_indices]
-            textFile = [textFile[x] for x in remaining_indices]
-        # Make grammar file consistent
-        # Remove nodes of zero out-degree (cascading)
-        removed_flag = True
-        while removed_flag:
-            removed_flag = False
-            seen_rhs_nts = set()
-            zero_out_degree_textFile_indices = []
-            for i,line in enumerate(textFile):
-                nt = line.split(' ->  ')[0]
-                rhs = line.split(' ->  ')[1].split()
-                for c in rhs:
-                    seen_rhs_nts.add(c)
-            for i, line in enumerate(textFile):
-                nt = line.split(' ->  ')[0]
-                # NT that is never seen before in RHS
-                if nt != 'N0' and nt not in seen_rhs_nts:
-                    removed_flag = True
-                    zero_out_degree_textFile_indices.append(i)
-            # Just trim the textfile to remove nodes of zero out-degree
-            remaining_indices = [x for x in range(len(textFile)) if x not in zero_out_degree_textFile_indices]
-            textFile = [textFile[x] for x in remaining_indices]
-
-        #Replace nodes of degree one with their children (cascading)
-        removed_flag = True
-        while removed_flag:
-            # Do multiple passes, if no replacements occur, terminate
-            removed_flag = False
-            nt_in_rhs_counter = Counter()
-            nt_rhs_line_occurrence = defaultdict(list)
-            one_out_degree_textFile_indices = []
-            for i, line in enumerate(textFile):
-                nt = line.split(' ->  ')[0]
-                rhs = line.split(' ->  ')[1].split()
-                for c in rhs:
-                    # Store occurrence line and as soon as seen
-                    nt_rhs_line_occurrence[c].append(i)
-                    nt_in_rhs_counter.update(c)
-            for i, line in enumerate(textFile):
-                nt = line.split(' ->  ')[0]
-                rhs = line.split(' ->  ')[1].split()
-                # NT that is only seen once before
-                if nt_in_rhs_counter[nt] == 1:
-                    removed_flag = True
-                    if nt_rhs_line_occurrence[nt] != 1:
-                        raise ValueError(str(nt) + ' - NT assumed to be seen only once, but actually seen more.')
-                    # replace rhs in occurrence
-                    occ_index = nt_rhs_line_occurrence[nt][0]
-                    occ_nt = textFile[occ_index].split(' ->  ')[0]
-                    occ_rhs = textFile[occ_index].split(' ->  ')[1].split()
-                    rep = {nt: rhs}
-                    occ_rhs = [i for c in occ_rhs for i in rep.get(c, [c])]
-                    # Also just modify textfile
-                    textFile[occ_index] = str(occ_nt) + ' ->  ' + occ_rhs
-                    one_out_degree_textFile_indices.append(i)
-            remaining_indices = [x for x in range(len(textFile)) if x not in one_out_degree_textFile_indices]
-            textFile = [textFile[x] for x in remaining_indices]
-
-        textFile = ['', ''] + textFile
-        with open(working_path + '/tmp_dag_after_removal.txt','w') as f:
-        # with open('tmp_dag_after_removal.txt', 'w') as f:
-            for l in textFile:
-                f.write(l + '\n')
-        with open(working_path + '/tmp_dag_after_removal.txt', 'r') as f:
-        # with open('tmp_dag_after_removal.txt', 'r') as f:
-            self.initFromDAG(f)
-
-    # Loads the DAG from an external file (The file should start from 'N0' line, without cost logs)
+    #Loads the DAG from an external file (The file should start from 'N0' line, without cost logs)
     def initFromDAG(self, inputFile):
         def RepresentsInt(s):
             try:
@@ -504,7 +432,6 @@ class DAG(object):
         for n in targets:
             allPaths += numberOfDownwardPaths[n]
         # return
-        orig_targets = targets[:]
         for t in targets:
             numberOfUpwardPaths[t] = 0
         # for s in sources:
@@ -514,108 +441,25 @@ class DAG(object):
         listOfCentralNodes = []
         listOfCentralNodes_cents = []
         centralities = self.calculateCentralities(numberOfUpwardPaths, numberOfDownwardPaths)
-        centsDic = {k:(v,v2) for k,v,v2 in centralities}
+        centsDic = {k:v for k,v in centralities}
+        centsList = sorted([(k,centsDic[k]) for k in centsDic],key=lambda x: x[0])
+        nodeIDs = sorted(centsDic.keys())
+        nodeStrings = self.getListNodeStrings(nodeIDs)
+        # print centsDic
+        def mycp(a,b):
+            if len(a[0].split()) >= len(b[0].split()):
+                return 1
+            elif len(a[0].split()) < len(b[0].split()):
+                return -1
+            elif len(a[0]) == len(b[0]):
+                if a[1] >= b[1]:
+                    return 1
+                else:
+                    return -1
+        nodesAndCents = sorted([(nodeStrings[i],centsList[i][1]) for i in range(len(centsDic))],cmp=mycp)
+        for i in range(len(nodesAndCents)):
+            print "{}\t{}".format(nodesAndCents[i][0],nodesAndCents[i][1])
 
-        # count = 1
-        # for node in sorted(sources, key = lambda x : centsDic[x], reverse= True):
-        #     sys.stderr.write(str(count) + '\n')
-        #     count += 1
-        #     nodeString = str(self.getListNodeStrings([node])[0])
-        #     print nodeString + '\t' + str(centsDic[node]) + '\t',
-        #     parentNodes = []
-        #     for n in nx.nodes(self.DAGGraph):
-        #         if n != 0:
-        #             nString = str(self.getListNodeStrings([n])[0])
-        #             if nString != nodeString and nString.find(nodeString) >= 0:
-        #                 parentNodes.append(n)
-        #     parentNodes = sorted(parentNodes, key = lambda x : centsDic[x], reverse=True)
-        #     if len(parentNodes) > 0:
-        #         if centsDic[node] > centsDic[parentNodes[0]]:
-        #             print 'Y\t',
-        #         else:
-        #             print 'N\t',
-        #     else:
-        #         print 'Y\t',
-        #     for n in parentNodes:
-        #         nString = str(self.getListNodeStrings([n])[0])
-        #         print nString + '\t' + str(centsDic[n]) + '\t',
-        #     print
-        # return
-
-        # for node in nx.nodes(self.DAGGraph):
-        #     if node not in targets:
-        #         print str(numberOfDownwardPaths[node]) + '\t' + str(numberOfUpwardPaths[node]) + '\t' + str(centsDic[node])
-        # return
-
-        # for node in nx.nodes(self.DAGGraph):
-        #     if node not in tagets:
-        #         print str(self.DAGGraph.out_degree(node)) + '\t' + str(numberOfDownwardPaths[node]) + '\t' + str(numberOfUpwardPaths[node])+ '\t' + str(centsDic[node])
-        # return
-
-
-        # print len(nx.nodes(self.DAGGraph)) - 1
-
-        # print allPaths
-        # return
-
-        orig_cents = {k:(v,v2) for k,v,v2 in centralities}
-        topCentralNodeInfo = max(centralities, key=lambda x:x[1])
-        # print topCentralNodeInfo[1], topCentralNodeInfo[2][0], topCentralNodeInfo[2][1]
-        # return
-        top_num = 20
-        import math
-        top10CentsSorted = sorted(centralities, key=lambda x:x[1], reverse = True)[:top_num]
-        # print top10CentsSorted[int(top_num / 2)][1], top10CentsSorted[int(top_num / 2)][2][0], top10CentsSorted[int(top_num / 2)][2][1]
-        # return
-        # print top10CentsSorted[0][1],
-        # top10CentsSorted = sorted(centralities, key=lambda x: x[2][0], reverse=True)[:top_num]
-        # print top10CentsSorted[0][2][0],
-        # top10CentsSorted = sorted(centralities, key=lambda x: x[2][1] if x[2][0] > 1 else 0, reverse=True)[:top_num]
-        # print top10CentsSorted[0][2][1]
-
-        # return
-
-        allMaxes = [k for k in centralities if k[1] == topCentralNodeInfo[1]]
-        allMaxes = [allMaxes[0]]
-        # print '-------------', topCentralNodeInfo[1], len(allMaxes)
-        while topCentralNodeInfo[1] > 0 and float(number_of_current_paths)/float(number_of_initial_paths) > 1-tau:#Node with positive centrality exists
-            for nodeToBeRemoved in allMaxes:
-                nodeToBeRemoved = nodeToBeRemoved[0]
-                self.DAGGraph.remove_node(nodeToBeRemoved)
-                if nodeToBeRemoved in sources:
-                    sources.remove(nodeToBeRemoved)
-                listOfCentralNodes.append(nodeToBeRemoved)
-                listOfCentralNodes_cents.append(topCentralNodeInfo[1])
-                print topCentralNodeInfo[1]
-            numberOfUpwardPaths = {}
-            numberOfDownwardPaths = {}
-            for node in nx.nodes(self.DAGGraph):
-                numberOfUpwardPaths[node] = 0
-                numberOfDownwardPaths[node] = 0
-            self.calculateNumberOfUpwardPaths(sources, targets, numberOfUpwardPaths)
-            self.calculateNumberOfDownwardPaths(sources, targets, numberOfDownwardPaths)
-            # for t in targets:
-            #     numberOfUpwardPaths[t] = 0
-            # for s in sources:
-            #     numberOfDownwardPaths[s] = 0
-            centralities = self.calculateCentralities(numberOfUpwardPaths, numberOfDownwardPaths)
-            topCentralNodeInfo = max(centralities, key=lambda x: x[1])
-            allMaxes = [k for k in centralities if k[1] == topCentralNodeInfo[1]]
-            allMaxes = [allMaxes[0]]
-            number_of_current_paths = numberOfDownwardPaths[0]
-        self.DAGGraph = nx.MultiGraph()
-        self.createDAGGraph()#Reconstructing the DAG graph
-        core = []
-        # print str(len(nx.nodes(self.DAGGraph)) - len(targets) - len(sources)) + '\t' + str(allPaths)
-        arrayOfStrings = self.getListNodeStrings(listOfCentralNodes)
-        for i in range(len(arrayOfStrings)):
-            nodeString = arrayOfStrings[i]
-            core.append(nodeString.rstrip())
-            print nodeString.rstrip() + '\t' + str(listOfCentralNodes_cents[i]) + '\t' + str(orig_cents[listOfCentralNodes[i]])
-            # print str(listOfCentralNodes_cents[i])
-            # print len(nodeString.rstrip().split())
-            # break
-        return core, listOfCentralNodes_cents
     def getListNodeStrings(self, listNodes):
         arrayOfStrings = []
         for i in range(len(listNodes)):
@@ -780,7 +624,7 @@ class DAG(object):
     def calculateCentralities(self, numberOfUpwardPaths, numberOfDownwardPaths):
         result = []
         for node in nx.nodes(self.DAGGraph):
-            result.append((node, numberOfUpwardPaths[node] * numberOfDownwardPaths[node],(numberOfUpwardPaths[node],numberOfDownwardPaths[node])))
+            result.append((node, numberOfUpwardPaths[node] * numberOfDownwardPaths[node]))
             # result.append((node, numberOfUpwardPaths[node] * Length[node]))
         return result
     #Calculates the number of Upward paths for all nodes
@@ -789,15 +633,19 @@ class DAG(object):
             self.dfsUpward(n, sources, targets, numberOfUpwardPaths)
     # Helper recursive function
     def dfsUpward(self, n, sources, targets, numberOfUpwardPaths):
-        if self.DAGGraph.out_degree(n) == 0:
-            # if n in targets:
+        if n in targets:
             numberOfUpwardPaths[n] = 1
             return
-            # else:
-            #     numberOfUpwardPaths[n] = 0
-            #     return
+        elif self.DAGGraph.out_degree(n) == 0:
+            numberOfUpwardPaths[n] = 0
+            return
         elif numberOfUpwardPaths[n] > 0:
             return
+        # if self.DAGGraph.out_degree(n) == 0:
+        #     numberOfUpwardPaths[n] = 1
+        #     return
+        # elif numberOfUpwardPaths[n] > 0:
+        #     return
         else:
             for o in self.DAGGraph.out_edges(n):
                 self.dfsUpward(o[1], sources, targets, numberOfUpwardPaths)
@@ -808,15 +656,19 @@ class DAG(object):
             self.dfsDownward(n, sources, targets, numberOfDownwardPaths)
     # Helper recursive function
     def dfsDownward(self, n, sources, targets, numberOfDownwardPaths):
-        if self.DAGGraph.in_degree(n) == 0:
-            # if n in sources:
+        if n in sources:
             numberOfDownwardPaths[n] = 1
             return
-            # else:
-            #     numberOfDownwardPaths[n] = 0
-            #     return
+        elif self.DAGGraph.in_degree(n) == 0:
+            numberOfDownwardPaths[n] = 0
+            return
         elif numberOfDownwardPaths[n] > 0:
             return
+        # if self.DAGGraph.in_degree(n) == 0:
+        #     numberOfDownwardPaths[n] = 1
+        #     return
+        # elif numberOfDownwardPaths[n] > 0:
+        #     return
         else:
             for o in self.DAGGraph.in_edges(n):
                 self.dfsDownward(o[0], sources, targets, numberOfDownwardPaths)
@@ -843,15 +695,11 @@ class DAG(object):
                     lengths[n].append(1+l)
     # ...........Printing Functions........
     # Prints the DAG, optionally in integer form if intDAGPrint==True
-    def printDAG(self, intDAGPrint, file=None):
+    def printDAG(self, intDAGPrint):
         # self.logMessage('DAGCost(Concats): ' + str(self.DAGCost(CostFunction.ConcatenationCost)))
         # self.logMessage('DAGCost(Edges):' + str(self.DAGCost(CostFunction.EdgeCost)))
-        if file == None:
-            print 'DAGCost(Concats): ' + str(self.DAGCost(CostFunction.ConcatenationCost))
-            print 'DAGCost(Edges):' + str(self.DAGCost(CostFunction.EdgeCost))
-        else:
-            print >>file, 'DAGCost(Concats): ' + str(self.DAGCost(CostFunction.ConcatenationCost))
-            print >>file, 'DAGCost(Edges):' + str(self.DAGCost(CostFunction.EdgeCost))
+        print 'DAGCost(Concats): ' + str(self.DAGCost(CostFunction.ConcatenationCost))
+        print 'DAGCost(Edges):' + str(self.DAGCost(CostFunction.EdgeCost))
         # return
         DAG = self.concatenatedDAG
         # print 'dag'
@@ -902,17 +750,11 @@ class DAG(object):
             if intDAGPrint:
                 subnodes = nodes[ntDic[nt]].rstrip(' ||').split(' ||')
                 for s in subnodes:
-                    if file == None:
-                        print ntDic[nt] + ' ->' + s
-                    else:
-                        print >> file, ntDic[nt] + ' ->' + s
+                    print ntDic[nt] + ' ->' + s
             else:
                 subnodes = nodes[ntDic[nt]].rstrip(' ||').split(' ||')
                 for s in subnodes:
-                    if file == None:
-                        print ntDic[nt] + ' -> ' + s
-                    else:
-                        print >> file, ntDic[nt] + ' -> ' + s
+                    print ntDic[nt] + ' -> ' + s
             nodeCounter += 1
     def printDAG_toFile(self, outFile, intDAGPrint):
         # self.logMessage('DAGCost(Concats): ' + str(self.DAGCost(CostFunction.ConcatenationCost)))
@@ -1743,36 +1585,26 @@ if __name__ == "__main__":
     #     for e in sorted(ageReuseScatter, key = lambda x : (x[0],x[1])):
     #         print str(e[0]) + '\t' + str(e[1]) + '\t' + str(e[2])
     # igemAgeReuseScatter()
-
     #######Run G-Lexis on stream
-    # # path = 'genSeqs-Final/' + sys.argv[-1]
-    # path = sys.argv[-2]
+    # path = 'genSeqs-Final/' + sys.argv[-1]
     # data = open(path, 'r').readlines()
     # tmp_dataset = []
-    # counter = 0
-    # init = 0.05
-    # for l in data:
-    #     if counter < init * len(data):
-    #         tmp_dataset.append(l)
-    #     else:
-    #         break
-    #     counter += 1
-    # prev_len_tmp_dataset = len(tmp_dataset)
-    # data_increment = 0.1
-    # for i in range(counter,len(data)):
+    # prev_len_tmp_dataset = 0
+    # data_increment = 0.05
+    # for i in range(len(data)):
     #     t = data[i]
     #     tmp_dataset.append(t)
     #     if len(tmp_dataset)-prev_len_tmp_dataset > data_increment * float(len(data)) or i == len(data) - 1:
     #         #run Lexis on tmp_dataset
     #         sys.stderr.write(str((float(len(tmp_dataset))/float(len(data)))*100) + '%\n')
-    #         f = open('TBTG/cs str/streamData/'+'tmp-' +sys.argv[-1].split('.')[0]+'-'+str(int((float(len(tmp_dataset))/float(len(data)))*100))+'.txt', 'w')
+    #         f = open('genSeqs-Final/streamData/'+'tmp-' +sys.argv[-1].split('.')[0]+'-'+str(int((float(len(tmp_dataset))/float(len(data)))*100))+'.txt', 'w')
     #         for tt in tmp_dataset:
     #             f.write(tt)
     #         f.close()
-    #         g = DAG(open('TBTG/cs str/streamData/'+'tmp-' +sys.argv[-1].split('.')[0]+'-'+str(int((float(len(tmp_dataset))/float(len(data)))*100))+'.txt', 'r'), loadDAGFlag, chFlag, noNewLineFlag)
+    #         g = DAG(open('genSeqs-Final/streamData/'+'tmp-' +sys.argv[-1].split('.')[0]+'-'+str(int((float(len(tmp_dataset))/float(len(data)))*100))+'.txt', 'r'), loadDAGFlag, chFlag, noNewLineFlag)
     #         g.GLexis(quietLog, rFlag, functionFlag)
     #         # g.printDAG(printIntsDAG)
-    #         g.printDAG_toFile(open('TBTG/cs str/DAGs/'+sys.argv[-1].split('.')[0]+'-'+str(int((float(len(tmp_dataset))/float(len(data)))*100))+'.txt','w'), printIntsDAG)
+    #         g.printDAG_toFile(open('genSeqs-Final/DAGs/'+sys.argv[-1].split('.')[0]+'-'+str(int((float(len(tmp_dataset))/float(len(data)))*100))+'.txt','w'), printIntsDAG)
     #         prev_len_tmp_dataset = len(tmp_dataset)
 
     # clusteringiGEM(open('igem.txt','r').readlines())
@@ -1895,10 +1727,24 @@ if __name__ == "__main__":
     #     print str(node) + '\t' + str(k['age_index']) + '\t' + str(k['core_index']) + '\t' + str(k['core_count'])
 
     #######Plain central nodes extraction
-    # g = DAG(open(sys.argv[-1], 'r'), loadDAGFlag, chFlag, noNewLineFlag)
-    # centralNodes = g.greedyCoreID_ByTau(0.99)
-    # print centralNodes[1]
-    # # print len(centralNodes[0])
+    g = DAG(open(sys.argv[-1], 'r'), loadDAGFlag, chFlag, noNewLineFlag)
+    # sources = []
+    # targets = []
+    # for node in nx.nodes(g.DAGGraph):
+    #     if g.DAGGraph.in_degree(node) == 0:
+    #         sources.append(node)
+    #     if g.DAGGraph.out_degree(node) == 0:
+    #         targets.append(node)
+    # tendril_paths = 0
+    # for s in sources:
+    #     for t in targets:
+    #         ps = nx.all_simple_paths(g.DAGGraph, source=s, target=t)
+    #         plens = map(len, ps)
+    #         if len(plens) > 0:
+    #             tendril_paths += sum([i == min(plens) for i in plens])
+    # print 'tau', float(200000 - tendril_paths) / 200000
+    centralNodes = g.greedyCoreID_ByTau(1)
+    # print len(centralNodes[0])
 
     #######DAG Pruning
     # import pickle
@@ -2017,148 +1863,3 @@ if __name__ == "__main__":
     # numData = sys.argv[-1].split('gram')[1].split('.txt.txt')[0]
     # print numData
     # print structSimTest('/Users/payamsiyari/Desktop/inc/cs-fullProfile/clean-slate full profile/gram' + str(numData) + '.txt', sys.argv[-1])
-
-    # from collections import Counter
-    # dic = Counter()
-    # f=open(sys.argv[-1],'r').readlines()
-    # for l in f:
-    #     for c in l.split():
-    #         dic[c] += 1
-    # for c in sorted([(c,dic[c]) for c in dic],key=lambda x:x[1], reverse = True):
-    #     # print str(c[0]) + '\t' + str(c[1])
-    #     print str(c[1])
-
-    # g = DAG(open(sys.argv[-1], 'r'), loadDAGFlag, chFlag, noNewLineFlag)
-    # sources = []
-    # targets = []
-    # for node in nx.nodes(g.DAGGraph):
-    #     if g.DAGGraph.in_degree(node) == 0:
-    #         sources.append(node)
-    #     if g.DAGGraph.out_degree(node) == 0:
-    #         targets.append(node)
-    # tendril_paths = 0
-    # for s in sources:
-    #     for t in targets:
-    #         ps = nx.all_simple_paths(g.DAGGraph, source=s, target=t)
-    #         plens = map(len,ps)
-    #         if len(plens) > 0:
-    #             tendril_paths += sum([i==min(plens) for i in plens])
-    # print 'tau', float(200000-tendril_paths)/200000
-    # centralNodes = g.greedyCoreID_ByTau(float(200000-tendril_paths)/200000)
-    # print centralNodes[1]
-    # print len(centralNodes[0])
-
-    # psum = 0
-    # pnum = 0
-    # num_all_paths = 0
-    # listOfSources = []
-    # for s in sources:
-    #     for t in targets:
-    #         ps = nx.all_simple_paths(g.DAGGraph, source=s, target=t)
-    #         for p in ps:
-    #             psum += len(p)
-    #             pnum += 1
-    #         listOfSources.append((s, pnum))
-    #         num_all_paths += pnum
-    #         pnum = 0
-    # # print str(len(nx.nodes(g.DAGGraph))) + '\t' + str(float(psum)/pnum)
-    # # print str(float(psum)/pnum)
-    # # sys.exit()
-    # listOfSources = sorted(listOfSources, key=lambda x : x[1], reverse=True)
-    # # print listOfSources
-    # perc = 0
-    # coreSize = 0
-    # coreFlat75 = 0
-    # coreFlat85 = 0
-    # coreFlat95 = 0
-    # f = open(sys.argv[-1], 'r').readlines()
-    # # k = 200
-    # # LEN = len([l for l in f if l.startswith('N0 ')])
-    # LEN = num_all_paths
-    # for s,ps in listOfSources:
-    #     perc += float(ps)/LEN
-    #     coreSize += 1
-    #     if perc > .95 and coreFlat95 == 0:
-    #         coreFlat95 = coreSize
-    #     elif perc > .85 and coreFlat85 == 0:
-    #         coreFlat85 = coreSize
-    #     elif perc > .75 and coreFlat75 == 0:
-    #         coreFlat75 = coreSize
-    # print str(coreFlat75) + '\t' +str(coreFlat85) + '\t' +str(coreFlat95)
-
-    #######Comparing core contents (fixed Jaccard similarity)
-    # coreSets = [[],[]]
-    # for _,l in enumerate(open(sys.argv[-2],'r').readlines()):
-    #     if l == '':
-    #         break
-    #     try:
-    #         coreSets[0].append(
-    #             (' '.join(map(unichr,map(int,l.split('\t')[0].split()))), int(l.split('\t')[2]))
-    #         )
-    #     except IndexError:
-    #         break
-    # for _,l in enumerate(open(sys.argv[-1], 'r').readlines()):
-    #     if l == '':
-    #         break
-    #     try:
-    #         coreSets[1].append(
-    #             (' '.join(map(unichr, map(int, l.split('\t')[0].split()))), int(l.split('\t')[2]))
-    #         )
-    #     except IndexError:
-    #         break
-    # f1 = open(sys.argv[-4], 'r').readlines()
-    # f2 = open(sys.argv[-3], 'r').readlines()
-    #
-    # LEN1 = len([l for l in f1 if l.startswith('N0 ')]) * 200
-    # LEN2 = len([l for l in f2 if l.startswith('N0 ')]) * 200
-    #
-    # totalPaths = [LEN1,
-    #               LEN2]
-    # # totalPaths = len(open(sys.argv[-3], 'r').readlines()) * 200
-    # c_tau = [75,85,95]
-    # c_sizes = [[0,0,0],[0,0,0]]
-    # for i in range(len(coreSets)):
-    #     cSet = coreSets[i]
-    #     for j in range(len(c_tau)):
-    #         tau = float(c_tau[j])/100
-    #         pathRemovedRatio = 0.0
-    #         for k in range(len(cSet)):
-    #             if pathRemovedRatio < tau:
-    #                 pathRemovedRatio += float(cSet[k][1])/totalPaths[i]
-    #                 # pathRemovedRatio += float(cSet[k][1]) / totalPaths
-    #             else:
-    #                 c_sizes[i][j] = k
-    #                 break
-    # jaccard_sims = [0,0,0]
-    # weight_jaccard = True
-    # import editdistance
-    # for i in range(len(c_tau)):
-    #     tmp_csets = [coreSets[0][:c_sizes[0][i]], coreSets[1][:c_sizes[1][i]]]
-    #     if weight_jaccard:
-    #         for j in range(len(tmp_csets[1])):
-    #             minDist = 1.0
-    #             for k in range(len(tmp_csets[0])):
-    #                 tmp_dist = editdistance.eval(tmp_csets[1][j][0], tmp_csets[0][k][0])
-    #                 maxDist = float(max(len(tmp_csets[1][j][0]),len(tmp_csets[0][k][0])))/2
-    #                 # print tmp_csets[1][j][0], tmp_csets[0][k][0], tmp_dist
-    #                 if float(tmp_dist)/maxDist < minDist:
-    #                     minDist = float(tmp_dist)/maxDist
-    #             # print minDist
-    #             jaccard_sims[i] += 1-float(minDist)
-    #     else:
-    #         for j in range(len(tmp_csets[1])):
-    #             if tmp_csets[1][j][0] in [c_elem[0] for c_elem in tmp_csets[0]]:
-    #                 jaccard_sims[i] += 1
-    # # for i in range(len(jaccard_sims)):
-    # #     tmp_csets = [coreSets[0][:c_sizes[0][i]], coreSets[1][:c_sizes[1][i]]]
-    # #     print str(jaccard_sims[i]/len(set((tmp_csets[0]+tmp_csets[1])))) + '\t',
-    # # print '\t',
-    #
-    # for i in range(len(jaccard_sims)):
-    #     print str(jaccard_sims[i]/(min(c_sizes[0][i],c_sizes[1][i]))) + '\t',
-    #     # print str(jaccard_sims[i] / (min(c_sizes[0][i], c_sizes[1][i]))),
-    #     # print str(jaccard_sims[i]) + '\t',
-    # print
-    d = DAG(open(sys.argv[-1], 'r'), True, SequenceType.SpaceSeparated, False, removal_indices=[0, 1], working_path='/Users/payamsiyari/Desktop')
-    with open('a.txt', 'w') as f:
-        d.printDAG(False, f)
