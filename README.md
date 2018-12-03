@@ -14,7 +14,11 @@ This is the implementation of the Evo-Lexis framework presented in the paper: ht
 * Make sure to install SciPy by running ```pip install scipy```.
 * Make sure to install editdistance by running ```pip install editdistance```.
 
+## Usage
+* The main file for target generation is ```Target-Generator.py```. Details are written in the file.
+* The directory ```Metrics``` contains the necessary routines for computing the various metrics for Lexis-DAGs.
+
 ## References
 * [1] P. Siyari, B. Dilkina, C. Dovrolis, ''Emergence and Evolution of Hierarchical Structure in Complex Systems'', Accepted as a book chapter in Dynamics On and Of Complex Networks vol. III, Springer, 2018.
-* [2] M. Gallé. ''Searching for compact hierarchical structures in DNA by means of the Smallest Grammar Problem'', PhD thesis, Université Rennes 1, 2011.
+* [2] M. Gallé. ''Searching for compact hierarchical structures in DNA by means of the Smallest Grammar Problem'', PhD thesis, Université Rennes 1, 2011.
 * [3] https://networkx.github.io
